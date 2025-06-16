@@ -1,0 +1,67 @@
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+
+{{#each patterns}}
+import { {{id}}Tools } from './tools/{{id}}-tools.js';
+{{/each}}
+
+{{#each integrations}}
+import { {{name}}Config } from './integrations/{{name}}.js';
+{{/each}}
+
+class {{projectName}}Server {
+  private server: Server;
+  
+  constructor() {
+    this.server = new Server(
+      {
+        name: '{{projectName}}',
+        version: '0.1.0',
+      },
+      {
+        capabilities: {
+          tools: {},
+        },
+      }
+    );
+
+    this.setupHandlers();
+  }
+
+  private setupHandlers() {
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      return {
+        tools: [
+          {{#each patterns}}
+          ...{{id}}Tools.getToolDefinitions(),
+          {{/each}}
+        ],
+      };
+    });
+
+    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      const { name, arguments: args } = request.params;
+
+      {{#each patterns}}
+      if ({{id}}Tools.canHandleTool(name)) {
+        return await {{id}}Tools.handleTool(name, args);
+      }
+      {{/each}}
+
+      throw new Error(`Unknown tool: ${name}`);
+    });
+  }
+
+  async run() {
+    const transport = new StdioServerTransport();
+    await this.server.connect(transport);
+    console.error('{{projectName}} MCP server running on stdio');
+  }
+}
+
+const server = new {{projectName}}Server();
+server.run().catch(console.error);
